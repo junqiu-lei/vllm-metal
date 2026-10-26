@@ -143,11 +143,12 @@ def _make_inner(
     *,
     with_v_proj: bool = True,
     with_v_norm: bool = False,
+    dtype: mx.Dtype = mx.float32,
 ) -> SimpleNamespace:
     """Build a fake Attention module matching sdpa_forward's contract."""
-    q_weight = mx.ones((_N_HEADS * _HEAD_DIM, _HIDDEN))
-    k_weight = mx.ones((_N_KV_HEADS * _HEAD_DIM, _HIDDEN))
-    v_weight = mx.ones((_N_KV_HEADS * _HEAD_DIM, _HIDDEN))
+    q_weight = mx.ones((_N_HEADS * _HEAD_DIM, _HIDDEN), dtype=dtype)
+    k_weight = mx.ones((_N_KV_HEADS * _HEAD_DIM, _HIDDEN), dtype=dtype)
+    v_weight = mx.ones((_N_KV_HEADS * _HEAD_DIM, _HIDDEN), dtype=dtype)
 
     inner = SimpleNamespace(
         n_heads=_N_HEADS,
@@ -773,12 +774,13 @@ class TestSDPAForward:
     """Tests for ``sdpa_forward`` runtime argument propagation."""
 
     @pytest.mark.parametrize("cache_dtype", [mx.bfloat16, mx.float16])
-    def test_output_projection_receives_the_layer_input_dtype(
+    def test_output_projection_receives_the_query_dtype(
         self, cache_dtype: mx.Dtype
     ) -> None:
-        """A float16 checkpoint with a bfloat16 cache must not hand o_proj a
-        bfloat16 tensor: MLX promotes the mix to a float32 residual stream."""
-        inner = _make_inner()
+        """A float16 checkpoint with a bfloat16 cache must hand o_proj the
+        float16 query dtype: MLX promotes a bfloat16/float16 mix to a float32
+        residual stream."""
+        inner = _make_inner(dtype=mx.float16)
         projected: list[mx.Dtype] = []
 
         def o_proj(out: mx.array) -> mx.array:
